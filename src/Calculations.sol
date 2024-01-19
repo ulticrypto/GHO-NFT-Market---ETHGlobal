@@ -12,7 +12,7 @@ contract Calculations {
     /// @dev Function to calculate the interest paid for the user every second.
     /// @param _amount amount deposited by the user.
     /// @param _interest interest payable on ten thousand basis.
-    function interestForSecond(uint256 _amount, uint256 _interest) internal pure returns(uint256 payPerSecond){
+    function interestForSecond(uint256 _amount, uint256 _interest) public pure returns(uint256 payPerSecond){
         if(_amount == 0){
            return payPerSecond = 0;
         }

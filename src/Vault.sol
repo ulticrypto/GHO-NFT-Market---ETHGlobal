@@ -102,23 +102,21 @@ contract Vault is AccessControl, ReentrancyGuard {
         emitEventBorrow(address(borrowToken), msg.sender,borrowAmount, block.timestamp);
     }
 
-    function repay(uint payAmount) public nonReentrant {
+    function repay() public nonReentrant {
 
         IBorrowControl.UserPosition memory info = control.getUserInfo(msg.sender);
 
-        if(payAmount < (info.borrowAmount + info.pendingBorrowInterestPerSecond + getInterestPerSecond(info.borrowAmount, control.getborrowIntesrest()))) {
-            revert("no full payment");
-        }
-
-        IERC20(borrowToken).safeTransferFrom(msg.sender, address(this),payAmount);
+        IERC20(borrowToken).safeTransferFrom(msg.sender, address(this),(info.borrowAmount + (info.borrowAmount + info.pendingBorrowInterestPerSecond + getInterestPerSecond(info.borrowAmount, control.getborrowIntesrest()))));
 
         control.updatePendingBorrowInterest(msg.sender, 0);
 
         control.updateBorrowInfo(msg.sender,0,0);
 
-        facilitator.burning(payAmount);
+        control.updatePayStatus(msg.sender, true);
 
-        emitEventRepay(address(borrowToken),msg.sender,payAmount, block.timestamp);
+        facilitator.burning(info.borrowAmount);
+
+        emitEventRepay(address(borrowToken),msg.sender,info.borrowAmount, block.timestamp);
     }
 
     function withdrawCollateral(uint amount) public nonReentrant {
@@ -202,7 +200,7 @@ contract Vault is AccessControl, ReentrancyGuard {
     
     function percentage(uint amount) public view returns(uint256 value){
         IBorrowControl.Assets memory info = control.getAssetInfo(address(collateralToken));
-        value = (amount * info.ltv)/1000;
+        value = (amount * info.ltv)/10000;
     }
 
     function emitEventDeposit(address token, address user, uint256 amount) private {
@@ -258,6 +256,10 @@ contract Vault is AccessControl, ReentrancyGuard {
 
     function updateCalcs(address _newCalcs) public onlyDev {
         calcs = ICalculations(_newCalcs);
+    }
+
+    function getRewards(address user) public view returns(uint256 _rewards){
+        _rewards = control.getRewardsInfo(user).pendingRewards + getInterestPerSecond(control.getUserInfo(user).collateralAmount, control.getAssetInfo(address(collateralToken)).collateralAPY);
     }
 
 }
