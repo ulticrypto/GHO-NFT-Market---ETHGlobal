@@ -1,0 +1,10 @@
+.env
+remappings.txt
+scripttest.txt
+cache
+out
+.DS_Store
+img/.DS_Store
+lib/.DS_Store
+src/test/.DS_Store
+src/.DS_Store
