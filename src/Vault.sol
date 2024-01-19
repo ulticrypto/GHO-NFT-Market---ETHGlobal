@@ -256,4 +256,8 @@ contract Vault is AccessControl, ReentrancyGuard {
             treasury = _treasury;
     }
 
+    function updateCalcs(address _newCalcs) public onlyDev {
+        calcs = ICalculations(_newCalcs);
+    }
+
 }

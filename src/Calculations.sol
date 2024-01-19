@@ -3,7 +3,7 @@ pragma solidity 0.8.19;
 
 import "./PRBMathUD60x18Typed.sol";
 
-library Calculations {
+contract Calculations {
 
     using PRBMathUD60x18Typed for PRBMath.UD60x18;
 

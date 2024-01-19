@@ -31,7 +31,7 @@ contract AggregatorProxy is Ownable {
   }
   
   function description() public pure returns(string memory name){
-    name = "Bored Ape Yacht Club Floor Price / ETH ";
+    name = "uBAYC / USD ";
   }
 
   function decimals() public pure returns(uint){

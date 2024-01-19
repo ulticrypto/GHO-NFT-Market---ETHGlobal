@@ -11,7 +11,6 @@ contract BorrowControl is AccessControl {
     uint256 private borrowIntesrest;
     
     mapping(address vault => bool stauts) private authorized;
-    mapping(address _factory => bool stauts) private factory;
 
     struct UserPosition {
         uint256 collateralAmount;
@@ -67,15 +66,7 @@ contract BorrowControl is AccessControl {
         }
         _;
     }
-
-     modifier onlyFactory() {
-        if(!factory[msg.sender]){
-            revert("not factory");
-        }
-        _;
-    }
     
-
     ///@dev function to create a new user position
     function createPosition(address user, uint256 collateralAmount, address collateralAddress, uint256 collateralInterestPerSecond) public onlyAuth {
         position[user].collateralAddress = collateralAddress;
@@ -90,12 +81,6 @@ contract BorrowControl is AccessControl {
         position[user].collateralInterestPerSecond = newCollateralInterestPerSecond;
         position[user].supplyDate = block.timestamp;
     }
-
-    /* ///@dev function to update the collateral interest of a user's position
-    function updatePendingCollateralInterest(address user, uint256 pendingCollateralInterest) public onlyAuth {
-         position[user].pendingCollateralInterest = pendingCollateralInterest;
-         
-    } */
 
     function updatePayStatus(address user, bool status) public onlyAuth {
         position[user].isPay = status;
@@ -135,11 +120,6 @@ contract BorrowControl is AccessControl {
         prizes = rewards[user];
     }
 
-    /* function getLastDateRewards(address user) public view returns(uint _lastcalc, uint _lastClaim) {
-        _lastcalc = rewards[user].lastcalc;
-        _lastClaim = rewards[user].lastClaim;
-    } */
-
     ///@dev function to update the pending rewards of a user's position
     function updatePenRewads(address user, uint256 penRewards) public onlyAuth {
         rewards[user].pendingRewards = penRewards;
@@ -163,7 +143,7 @@ contract BorrowControl is AccessControl {
         info = assetInfo[collateralAddress];
     }
 
-    function AddVault(address collateralAddress, address vault) public onlyFactory {
+    function AddVault(address collateralAddress, address vault) public onlyDev {
         if(vaultsInfo[collateralAddress] != address(0)){
             revert ("vault already create");
         }
@@ -186,7 +166,7 @@ contract BorrowControl is AccessControl {
         vault = vaultsInfo[collateralAddress];
     }
 
-    function deleteVault(address collateralAddress) public onlyFactory {
+    function deleteVault(address collateralAddress) public onlyDev {
         delete vaultsInfo[collateralAddress];
     }
 
@@ -199,11 +179,4 @@ contract BorrowControl is AccessControl {
         stauts = authorized[vault];
      }
 
-     function setFactory(address _factory, bool stauts) public onlyDev {
-        factory[_factory] = stauts;
-    }
-    
-    function getFactory(address _factory) public view returns(bool stauts) {
-        stauts = factory[_factory];
-     }
 }
