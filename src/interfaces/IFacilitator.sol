@@ -21,11 +21,16 @@ interface IFacilitator {
    */
   event GhoTreasuryUpdated(address indexed oldGhoTreasury, address indexed newGhoTreasury);
 
+   /**
+   * @dev Create GHO Token with 
+   */
+   function minting(address account, uint256 amount) external;
 
-   function minting() external;
-   
-   function burning() external;
-   
+   /**
+   * @dev  Burn GHO tokens either for loan repayment or to maintain the peg.
+   */
+   function burning(uint256 amount) external;
+
   /**
    * @notice Distribute fees to the GhoTreasury
    */

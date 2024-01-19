@@ -8,9 +8,9 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "./interfaces/ICalculations.sol";
 import "./interfaces/IBorrowControl.sol";
-import "./interfaces/IGhoToken.sol";
+import "./interfaces/IFacilitator.sol";
 
-contract Collateral is AccessControl, ReentrancyGuard {
+contract Vault is AccessControl, ReentrancyGuard {
 
     event DepositCollateral(address indexed token, address indexed user, uint amount);
     event WithdrawCollateral(address indexed token, address indexed user, uint amount, uint rewards);
@@ -24,17 +24,19 @@ contract Collateral is AccessControl, ReentrancyGuard {
     IERC20 immutable public collateralToken;
     IBorrowControl immutable public control;
     ICalculations public calcs;
-    IGhoToken public borrowToken;
+    IERC20 public borrowToken;
+    IFacilitator public facilitator;
     address public treasury;
     bool public paused = false;
 
-    constructor(address _collateralToken, address _control, address _calcs, address _borrowToken) {
+    constructor(address _collateralToken, address _control, address _calcs, address _borrowToken, address _facilitator) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(DEV_ROLE, msg.sender);
         collateralToken = IERC20(_collateralToken);
         control = IBorrowControl(_control);
         calcs = ICalculations(_calcs);
-        borrowToken = IGhoToken(_borrowToken);
+        borrowToken = IERC20(_borrowToken);
+        facilitator = IFacilitator(_facilitator);
     }
 
     modifier onlyDev() {
@@ -95,7 +97,7 @@ contract Collateral is AccessControl, ReentrancyGuard {
  
         }
 
-        borrowToken.mint(msg.sender, borrowAmount);
+        facilitator.minting(msg.sender, borrowAmount);
 
         emitEventBorrow(address(borrowToken), msg.sender,borrowAmount, block.timestamp);
     }
@@ -114,7 +116,7 @@ contract Collateral is AccessControl, ReentrancyGuard {
 
         control.updateBorrowInfo(msg.sender,0,0);
 
-        borrowToken.burn(payAmount);
+        facilitator.burning(payAmount);
 
         emitEventRepay(address(borrowToken),msg.sender,payAmount, block.timestamp);
     }

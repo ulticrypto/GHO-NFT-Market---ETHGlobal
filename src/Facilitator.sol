@@ -25,7 +25,11 @@ contract Facilitator is AccessControl, ReentrancyGuard {
         _;
     }
 
-    function minting() public onlyVault {}
+    function minting(address account, uint256 amount) public onlyVault {
+        token.mint(account, amount);
+    }
 
-    function burning() public onlyVault {}
+    function burning(uint256 amount) public onlyVault {
+        token.burn(amount);
+    }
 }
