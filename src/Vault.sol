@@ -9,13 +9,14 @@ import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "./interfaces/ICalculations.sol";
 import "./interfaces/IBorrowControl.sol";
 import "./interfaces/IFacilitator.sol";
+import "./interfaces/IRewardsVault.sol";
 
 contract Vault is AccessControl, ReentrancyGuard {
 
     event DepositCollateral(address indexed token, address indexed user, uint amount);
     event WithdrawCollateral(address indexed token, address indexed user, uint amount, uint rewards);
     event TakeBorrow(address indexed token, address indexed user, uint loan, uint date);
-    event Repay(address indexed token, address indexed user, uint amount, uint date);
+    event Repay(address indexed token, address indexed user, uint amount, uint totalInterest);
 
     using SafeERC20 for IERC20;
 
@@ -26,10 +27,11 @@ contract Vault is AccessControl, ReentrancyGuard {
     ICalculations public calcs;
     IERC20 public borrowToken;
     IFacilitator public facilitator;
+    IRewardsVault public rewardsVault;
     address public treasury;
     bool public paused = false;
 
-    constructor(address _collateralToken, address _control, address _calcs, address _borrowToken, address _facilitator) {
+    constructor(address _collateralToken, address _control, address _calcs, address _borrowToken, address _facilitator, address _rewardsVault) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(DEV_ROLE, msg.sender);
         collateralToken = IERC20(_collateralToken);
@@ -37,6 +39,7 @@ contract Vault is AccessControl, ReentrancyGuard {
         calcs = ICalculations(_calcs);
         borrowToken = IERC20(_borrowToken);
         facilitator = IFacilitator(_facilitator);
+        rewardsVault = IRewardsVault(_rewardsVault);
     }
 
     modifier onlyDev() {
@@ -53,17 +56,20 @@ contract Vault is AccessControl, ReentrancyGuard {
 
         collateralToken.safeTransferFrom(msg.sender, address(this),amount);
 
-        uint collateral = control.getUserInfo(msg.sender).collateralAmount;
+        IBorrowControl.UserPosition memory info = control.getUserInfo(msg.sender);
 
-        if(collateral == 0){
+        uint rewards;
+        if(info.collateralAmount == 0){
 
             control.createPosition(msg.sender, amount, address(collateralToken), getInterestPerSecond(amount, control.getAssetInfo(address(collateralToken)).collateralAPY));
 
         } else {
+            
+            rewards = getTotalInterest(info.borrowDate, info.borrowInterestPerSecond);
 
-            control.updatePenRewads(msg.sender, getInterestPerSecond(collateral, control.getAssetInfo(address(collateralToken)).collateralAPY));
+            control.updatePenRewads(msg.sender, rewards);
 
-            uint total = collateral + amount;
+            uint total = info.collateralAmount + amount;
 
             control.updateCollateral(msg.sender,total, getInterestPerSecond(total, control.getAssetInfo(address(collateralToken)).collateralAPY));
   
@@ -81,17 +87,19 @@ contract Vault is AccessControl, ReentrancyGuard {
             revert ("not enough collateral");
         }
 
-        uint oldborrow = control.getUserInfo(msg.sender).borrowAmount;
+        IBorrowControl.UserPosition memory info  =  control.getUserInfo(msg.sender);
 
-        if(oldborrow == 0){
+        if(info.borrowAmount == 0){
 
             control.setBorrowInfo(msg.sender,borrowAmount,getInterestPerSecond(borrowAmount, control.getborrowIntesrest())); 
 
         }else{
-            
-            control.updatePendingBorrowInterest(msg.sender, getInterestPerSecond(borrowAmount, control.getborrowIntesrest()));
 
-            uint total = borrowAmount + oldborrow;
+            uint interest = getTotalInterest(info.borrowDate, info.borrowInterestPerSecond);
+            
+            control.updatePendingBorrowInterest(msg.sender, interest);
+
+            uint total = borrowAmount + info.borrowAmount;
 
             control.updateBorrowInfo(msg.sender,total,getInterestPerSecond(total, control.getborrowIntesrest()));
  
@@ -106,7 +114,11 @@ contract Vault is AccessControl, ReentrancyGuard {
 
         IBorrowControl.UserPosition memory info = control.getUserInfo(msg.sender);
 
-        IERC20(borrowToken).safeTransferFrom(msg.sender, address(this),(info.borrowAmount + (info.borrowAmount + info.pendingBorrowInterestPerSecond + getInterestPerSecond(info.borrowAmount, control.getborrowIntesrest()))));
+        uint interest = getTotalInterest(info.borrowDate, info.borrowInterestPerSecond);
+
+        uint totalInterest = (interest + info.pendingBorrowInterest);
+
+        IERC20(borrowToken).safeTransferFrom(msg.sender, address(this),(info.borrowAmount + totalInterest));
 
         control.updatePendingBorrowInterest(msg.sender, 0);
 
@@ -114,13 +126,16 @@ contract Vault is AccessControl, ReentrancyGuard {
 
         control.updatePayStatus(msg.sender, true);
 
-        facilitator.burning(info.borrowAmount);
+        burnTokens(info.borrowAmount);
+
+        IERC20(borrowToken).safeTransfer(treasury, totalInterest); 
 
         emitEventRepay(address(borrowToken),msg.sender,info.borrowAmount, block.timestamp);
     }
 
     function withdrawCollateral(uint amount) public nonReentrant {
         uint rewards;
+        uint totalrewards;
 
         IBorrowControl.UserPosition memory info = control.getUserInfo(msg.sender);
 
@@ -134,16 +149,20 @@ contract Vault is AccessControl, ReentrancyGuard {
                 revert("have a loan");
             }
 
-            rewards = control.getRewardsInfo(msg.sender).pendingRewards + getInterestPerSecond(info.collateralAmount, control.getAssetInfo(address(collateralToken)).collateralAPY);
+            rewards = getTotalInterest(info.supplyDate, info.collateralInterestPerSecond);
+
+            totalrewards = (rewards + control.getRewardsInfo(msg.sender).pendingRewards);
 
             control.updatePenRewads(msg.sender, 0);
             control.updateCollateral(msg.sender,0, 0);   
 
             collateralToken.safeTransfer(msg.sender, amount);
 
-            control.updateClaimRewads(msg.sender, rewards);
+            control.updateClaimRewads(msg.sender, totalrewards);
 
-            IERC20(borrowToken).safeTransfer(msg.sender, rewards);
+            rewardsVault.withdraw(totalrewards);
+
+            IERC20(borrowToken).safeTransfer(msg.sender, totalrewards);
 
         }else {
 
@@ -156,7 +175,9 @@ contract Vault is AccessControl, ReentrancyGuard {
                 revert("unhealthy loan");
             }
 
-            rewards = control.getRewardsInfo(msg.sender).pendingRewards + getInterestPerSecond(info.collateralAmount, control.getAssetInfo(address(collateralToken)).collateralAPY);
+            rewards = getTotalInterest(info.supplyDate, info.collateralInterestPerSecond);
+
+            totalrewards = (rewards + control.getRewardsInfo(msg.sender).pendingRewards);
             
             control.updatePenRewads(msg.sender, 0);
 
@@ -164,14 +185,21 @@ contract Vault is AccessControl, ReentrancyGuard {
 
             collateralToken.safeTransfer(msg.sender, amount);
 
-            control.updateClaimRewads(msg.sender, rewards);
+            control.updateClaimRewads(msg.sender, totalrewards);
 
-            IERC20(borrowToken).safeTransfer(msg.sender, rewards);
+            rewardsVault.withdraw(totalrewards);
+
+            IERC20(borrowToken).safeTransfer(msg.sender, totalrewards);
         }
 
-        emitEventWithdraw(address(collateralToken), msg.sender, amount,rewards);
+        emitEventWithdraw(address(collateralToken), msg.sender, amount,totalrewards);
     }
-    
+
+
+    function burnTokens(uint amount) private {
+        IERC20(borrowToken).safeTransfer(address(facilitator),amount);
+        facilitator.burning(amount);
+    }
 
     function collateralUSDValue(uint collateral) private view returns(int256 realValue){
         int256 roundPrice = getPrice();
@@ -180,6 +208,10 @@ contract Vault is AccessControl, ReentrancyGuard {
 
     function getInterestPerSecond(uint256 amount, uint256 precentage) private view returns(uint256 interestPerSecond) {
         interestPerSecond = calcs.interestForSecond(amount,precentage);
+    }
+
+    function getTotalInterest(uint256 _startTime, uint256 payPerSecond) private view returns(uint256 totalInterest) {
+        totalInterest = calcs.calculateInterest(_startTime,payPerSecond);
     }
     
     function getPrice() private view returns(int256 finalPrice){
@@ -222,12 +254,12 @@ contract Vault is AccessControl, ReentrancyGuard {
         }
     }
 
-    function emitEventRepay(address token, address user, uint amount, uint date) private {
+    function emitEventRepay(address token, address user, uint amount, uint totalInterest) private {
         assembly{
             //Repay(address,address,uint256,uint256)
             let signatureHash := 0xe4a1ae657f49cb1fb1c7d3a94ae6093565c4c8c0e03de488f79c377c3c3a24e0
             mstore(0, amount)
-            mstore(0x20, date)
+            mstore(0x20, totalInterest)
             log3(0, 0x40, signatureHash, token, user)
         }
     }

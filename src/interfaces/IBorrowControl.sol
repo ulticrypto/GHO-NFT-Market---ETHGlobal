@@ -2,7 +2,7 @@
 pragma solidity 0.8.19;
 interface IBorrowControl {
 
- struct UserPosition {
+    struct UserPosition {
         uint256 collateralAmount;
         address collateralAddress;
         uint256 supplyDate;
@@ -10,7 +10,7 @@ interface IBorrowControl {
         uint256 borrowAmount;
         uint256 borrowDate;
         uint256 borrowInterestPerSecond;
-        uint256 pendingBorrowInterestPerSecond;
+        uint256 pendingBorrowInterest;
         address delegateFor;
         bool isPay;
         bool isLiquidated;
@@ -44,7 +44,7 @@ interface IBorrowControl {
 
     function updateBorrowInfo(address user,uint256 newBorrowAmount,uint256 newBorrowInterestPerSecond) external;
 
-    function updatePendingBorrowInterest(address user, uint256 pendingBorrowInterestPerSecond) external;
+    function updatePendingBorrowInterest(address user, uint256 pendingBorrowInterest) external;
 
     function updateLiquidateStatus(address user, bool status) external;
 

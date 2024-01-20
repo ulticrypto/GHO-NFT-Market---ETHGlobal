@@ -24,4 +24,17 @@ contract Calculations {
         payPerSecond = AmountPerSecond.value; // return number in factor 18
     }
 
+     /// @dev Function to calculate the total interest paid.
+     function calculateInterest(uint256 _startTime, uint256 payPerSecond) public view returns(uint256 totalInterest){
+         if(payPerSecond == 0){
+           return totalInterest = 0;
+        }
+        PRBMath.UD60x18 memory _payPerSecond = PRBMath.UD60x18({value: payPerSecond * 1e18});
+        PRBMath.UD60x18 memory today = PRBMath.UD60x18({value: block.timestamp});
+        PRBMath.UD60x18 memory numberOfDays = today.sub(PRBMath.UD60x18({value: _startTime}));
+        PRBMath.UD60x18 memory totalInterestAmount= numberOfDays.mul(_payPerSecond);
+
+        totalInterest = totalInterestAmount.value; // return number in factor 18
+    }
+
 }

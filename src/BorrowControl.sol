@@ -20,7 +20,7 @@ contract BorrowControl is AccessControl {
         uint256 borrowAmount;
         uint256 borrowDate;
         uint256 borrowInterestPerSecond;
-        uint256 pendingBorrowInterestPerSecond;
+        uint256 pendingBorrowInterest;
         address delegateFor;
         bool isPay;
         bool isLiquidated;
@@ -97,8 +97,8 @@ contract BorrowControl is AccessControl {
         position[user].borrowInterestPerSecond = newBorrowInterestPerSecond;
     }
 
-    function updatePendingBorrowInterest(address user, uint256 pendingBorrowInterestPerSecond)  public onlyAuth {
-        position[user].pendingBorrowInterestPerSecond = pendingBorrowInterestPerSecond;
+    function updatePendingBorrowInterest(address user, uint256 pendingBorrowInterest)  public onlyAuth {
+        position[user].pendingBorrowInterest = pendingBorrowInterest;
         position[user].borrowDate= block.timestamp;
     }
 
